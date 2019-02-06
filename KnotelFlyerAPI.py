@@ -4,9 +4,18 @@
 from __future__ import print_function
 import uuid
 import time
+import io
+import os.path
+import webbrowser
+from io import StringIO
 from apiclient import discovery 
+from apiclient.http import MediaIoBaseDownload
 from httplib2 import Http 
 from oauth2client import file, client, tools
+from apiclient.http import MediaFileUpload
+
+
+
 
 start = time.time()
 firstsec = time.time()
@@ -61,13 +70,7 @@ for key in propAttrs:
                 tempstr = '\u2022'+ ' ' + feat
                 feat = tempstr
                 propAttrs[key][col][i] = feat
-for some in propAttrs:   
-    property = propAttrs[some]['Number'] + ' ' + propAttrs[some]['Address'] + ' ' + propAttrs[some]['Floor']
-    images[some] = {
-        'heroimagename' : property + ' ' + 'heroImage.jpg',            #make image names to find
-        'secondimagename' : property + ' ' + 'secondImage.jpg',
-        'fpimagename' : property + ' ' + 'FloorPlan.jpg',
-    }
+
 firstsecend = time.time()
 print('sheets takes: ',firstsecend-firstsec)
 
@@ -79,18 +82,9 @@ def FindImageLoc(slide, obj):
                 if obj['shape']['shapeType'] == 'RECTANGLE':                    
                     return obj
 
-def pullImg(image):
-    rsp = DRIVE.files().list(
-        corpora = 'teamDrive',
-        includeTeamDriveItems = True,
-        q="name='%s'" % image,
-        spaces = 'drive',
-        supportsTeamDrives= True,
-        teamDriveId='0ALFQiBxFeGSCUk9PVA').execute()['files'][0]
-
+def pullImg(image):  
     imageURL = '%s&access_token=%s' % (
-            DRIVE.files().get_media(fileId=rsp['id']).uri, creds.access_token)
-    
+            DRIVE.files().get_media(fileId=image).uri, creds.access_token)
     return imageURL
 
 def MakeFlyer(DECK_ID, DATA, val):
@@ -102,9 +96,9 @@ def MakeFlyer(DECK_ID, DATA, val):
             fields='slides').execute().get('slides', [])[1] #Second slide
     obj = FindImageLoc(slide1, obj)
     
-    HERO_IMAGE = images[val]['heroimagename']
-    SECOND_IMAGE = images[val]['secondimagename']
-    FLOORPLAN_IMAGE = images[val]['fpimagename']
+    HERO_IMAGE = propAttrs[val]['heroImg']
+    SECOND_IMAGE = propAttrs[val]['secImg']
+    FLOORPLAN_IMAGE = propAttrs[val]['fpImg']
 
     print('pull hero image')
     HEROIMG_url = pullImg(HERO_IMAGE)
@@ -221,6 +215,10 @@ def MakeFlyer(DECK_ID, DATA, val):
     flyerend = time.time()
     print('replacement section takes: ',flyermakes-flyerend)
 
+def Export(DECK_ID):
+    export_url = 'https://docs.google.com/presentation/d/' + DECK_ID + '/export/pdf'
+    webbrowser.open(export_url)
+  
 # start drive section 
 for g, val in enumerate(propAttrs):  #go through each property in propAttrs
 
@@ -236,7 +234,6 @@ for g, val in enumerate(propAttrs):  #go through each property in propAttrs
     flyerName = propAttrs[val]['Number']+ ' ' + propAttrs[val]['Address']+ ' ' + propAttrs[val]['Floor']+ ' ' + propAttrs[val]['Suite']
     DATA = {'name': flyerName}  
     print('copying flyer template as %r' %DATA['name'])
-    # DECK_ID = DRIVE.files().copy(body=DATA, fileId=tempID).execute()['id']
     DECK_ID = DRIVE.files().copy(body=DATA, fileId=rsp['id'], supportsTeamDrives = True).execute()['id'] #create new presentation to work out of 
     
     FOLDER_ID = propAttrs[val]['FolderId']
@@ -245,12 +242,10 @@ for g, val in enumerate(propAttrs):  #go through each property in propAttrs
     previous_parents = ",".join(file.get('parents'))
     file = drive_service.files().update(fileId=DECK_ID, addParents=FOLDER_ID, removeParents=previous_parents, fields='id, parents', supportsTeamDrives = True).execute()
 
-
     propte = time.time()
     print('copying and moving takes: ', propts - propte)
     MakeFlyer(DECK_ID, DATA, val) 
-
-
+    Export(DECK_ID)
 
 
 
