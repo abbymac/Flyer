@@ -16,7 +16,6 @@ from apiclient.http import MediaFileUpload
 
 
 
-
 start = time.time()
 firstsec = time.time()
 tempID = '1OnKnCJv7FzE6JMTyWt_TvIXh7cSt-h98hOotI8zDX_g'
@@ -37,6 +36,9 @@ DRIVE = discovery.build('drive', 'v3', http=HTTP)
 drive_service = discovery.build('drive', 'v3', http=creds.authorize(Http()))
 SHEETS = discovery.build('sheets', 'v4', http=HTTP)
 SLIDES = discovery.build('slides', 'v1', http=HTTP)
+
+gen_uuid = lambda : str(uuid.uuid4())
+
 #end boilerplate
 
 # start sheets section
@@ -44,6 +46,7 @@ print('Getting sheets text')
 sheetID = '1KhJHmWToEP2SrTLrznx8bx83ki7swhnuiyQebZ48ueg' #published google sheet we use as reference: titled- 'Flyer API input' in knotel account
 properties = SHEETS.spreadsheets().values().get(range='Sheet1',spreadsheetId=sheetID).execute().get('values')   
 
+driveID = '0ALFQiBxFeGSCUk9PVA'
 images = {}
 Keys = []
 
@@ -215,10 +218,26 @@ def MakeFlyer(DECK_ID, DATA, val):
     flyerend = time.time()
     print('replacement section takes: ',flyermakes-flyerend)
 
-def Export(DECK_ID):
-    export_url = 'https://docs.google.com/presentation/d/' + DECK_ID + '/export/pdf'
-    webbrowser.open(export_url)
-  
+def Export(file_id, filename):
+    MIMETYPE = 'application/pdf'
+    data = DRIVE.files().export(fileId=DECK_ID, mimeType=MIMETYPE).execute()
+    if data: 
+        fn = '%s.pdf' % os.path.splitext(filename)[0]
+        with open(fn, 'wb') as fh:
+            fh.write(data)
+        print('downloaded "%s" (%s)' % (fn, MIMETYPE))
+     
+def Upload(file_id, filename, FOLDER_ID, driveId):
+    filename = filename + '.pdf'
+    metadata = {'name': filename, 'mimetype':'application/pdf', 'teamDriveId': driveId, 'parents': FOLDER_ID, 'supportsTeamDrives' : True}
+    res = DRIVE.files().create(body=metadata, media_body=filename).execute()
+    if res:
+        print('Uploaded "%s"' % filename)
+        print('id', res['id'])
+        pdfID = res['id']
+        print('id to move into', pdfID)
+        file = drive_service.files().update(fileId=pdfID, addParents=FOLDER_ID, fields='id, parents', supportsTeamDrives = True).execute()
+
 # start drive section 
 for g, val in enumerate(propAttrs):  #go through each property in propAttrs
 
@@ -228,7 +247,7 @@ for g, val in enumerate(propAttrs):  #go through each property in propAttrs
         includeTeamDriveItems = True,
         q = "name='Flyer Template API'",
         supportsTeamDrives = True,
-        teamDriveId = '0ALFQiBxFeGSCUk9PVA'
+        teamDriveId = driveID,
     ).execute()['files'][0]
     
     flyerName = propAttrs[val]['Number']+ ' ' + propAttrs[val]['Address']+ ' ' + propAttrs[val]['Floor']+ ' ' + propAttrs[val]['Suite']
@@ -241,12 +260,12 @@ for g, val in enumerate(propAttrs):  #go through each property in propAttrs
     file = drive_service.files().get(fileId=DECK_ID, fields='parents', supportsTeamDrives = True).execute()
     previous_parents = ",".join(file.get('parents'))
     file = drive_service.files().update(fileId=DECK_ID, addParents=FOLDER_ID, removeParents=previous_parents, fields='id, parents', supportsTeamDrives = True).execute()
-
+    print('deck-id is', DECK_ID)
     propte = time.time()
     print('copying and moving takes: ', propts - propte)
     MakeFlyer(DECK_ID, DATA, val) 
-    Export(DECK_ID)
-
+    Export(DECK_ID, flyerName)
+    Upload(DECK_ID, flyerName, FOLDER_ID, driveID)
 
 
 end = time.time()
