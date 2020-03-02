@@ -1,0 +1,1 @@
+Reads from a google sheet to pull property information. It then creates a copy of a templated flyer (a google presentation) and auto-populates the appropriate fields with their corresponding information from the Google Sheet. Finally, the new flyer is downloaded as a PDF and re-uploaded to the drive.
